@@ -1,35 +1,40 @@
+
 #include <bits/stdc++.h>
 using namespace std;
 
-struct Term
+struct Group
 {
     string pattern;
     vector<int> minterms;
 };
 
 int n;
-int rows, cols;
 vector<int> ones;
-vector<Term> primeTerms;
+vector<Group> primeGroups;
 
 int gray(int x)
 {
     return x ^ (x >> 1);
 }
 
-bool validTerm(string pattern)
+bool isValid(string pattern)
 {
     vector<int> covered;
 
     for (int m = 0; m < (1 << n); m++)
     {
+        string binary = "";
+
+        for (int i = n - 1; i >= 0; i--)
+        {
+            binary += char('0' + ((m >> i) & 1));
+        }
+
         bool match = true;
 
         for (int i = 0; i < n; i++)
         {
-            int bit = (m >> (n - 1 - i)) & 1;
-
-            if (pattern[i] != '-' && pattern[i] - '0' != bit)
+            if (pattern[i] != '-' && pattern[i] != binary[i])
             {
                 match = false;
                 break;
@@ -40,19 +45,19 @@ bool validTerm(string pattern)
             covered.push_back(m);
     }
 
-    if (covered.size() == 0)
+    if (covered.empty())
         return false;
 
-    for (int x : covered)
+    for (int m : covered)
     {
-        if (find(ones.begin(), ones.end(), x) == ones.end())
+        if (find(ones.begin(), ones.end(), m) == ones.end())
             return false;
     }
 
     return true;
 }
 
-bool moreGeneral(string a, string b)
+bool isBigger(string a, string b)
 {
     for (int i = 0; i < n; i++)
     {
@@ -61,25 +66,6 @@ bool moreGeneral(string a, string b)
     }
 
     return a != b;
-}
-
-string patternToExpression(string pattern)
-{
-    string result = "";
-    char variables[] = {'a', 'b', 'c', 'd'};
-
-    for (int i = 0; i < n; i++)
-    {
-        if (pattern[i] == '-')
-            continue;
-
-        result += variables[i];
-
-        if (pattern[i] == '0')
-            result += "'";
-    }
-
-    return result;
 }
 
 vector<int> getMinterms(string pattern)
@@ -94,7 +80,8 @@ vector<int> getMinterms(string pattern)
         {
             int bit = (m >> (n - 1 - i)) & 1;
 
-            if (pattern[i] != '-' && pattern[i] - '0' != bit)
+            if (pattern[i] != '-' &&
+                pattern[i] - '0' != bit)
             {
                 match = false;
                 break;
@@ -108,9 +95,29 @@ vector<int> getMinterms(string pattern)
     return result;
 }
 
-void findPrimeTerms()
+string makeExpression(string pattern)
 {
-    vector<string> allTerms;
+    char variable[] = {'a', 'b', 'c', 'd'};
+
+    string answer = "";
+
+    for (int i = 0; i < n; i++)
+    {
+        if (pattern[i] == '-')
+            continue;
+
+        answer += variable[i];
+
+        if (pattern[i] == '0')
+            answer += "'";
+    }
+
+    return answer;
+}
+
+void findPrimeGroups()
+{
+    vector<string> validGroups;
 
     int total = 1;
 
@@ -124,12 +131,12 @@ void findPrimeTerms()
 
         for (int i = 0; i < n; i++)
         {
-            int digit = x % 3;
-            x /= 3;
+            int value = x % 3;
+            x = x / 3;
 
-            if (digit == 0)
+            if (value == 0)
                 pattern += '0';
-            else if (digit == 1)
+            else if (value == 1)
                 pattern += '1';
             else
                 pattern += '-';
@@ -137,17 +144,17 @@ void findPrimeTerms()
 
         reverse(pattern.begin(), pattern.end());
 
-        if (validTerm(pattern))
-            allTerms.push_back(pattern);
+        if (isValid(pattern))
+            validGroups.push_back(pattern);
     }
 
-    for (string p : allTerms)
+    for (string p : validGroups)
     {
         bool prime = true;
 
-        for (string q : allTerms)
+        for (string q : validGroups)
         {
-            if (p != q && moreGeneral(q, p))
+            if (p != q && isBigger(q, p))
             {
                 prime = false;
                 break;
@@ -156,128 +163,27 @@ void findPrimeTerms()
 
         if (prime)
         {
-            Term t;
-            t.pattern = p;
-            t.minterms = getMinterms(p);
+            Group g;
 
-            primeTerms.push_back(t);
+            g.pattern = p;
+            g.minterms = getMinterms(p);
+
+            primeGroups.push_back(g);
         }
-    }
-}
-
-int bestTerms = 100;
-int bestLiterals = 100;
-vector<vector<int>> answers;
-
-void findCovers(vector<bool> covered, vector<int> selected)
-{
-    bool complete = true;
-
-    for (int i = 0; i < (int)ones.size(); i++)
-    {
-        if (!covered[i])
-        {
-            complete = false;
-            break;
-        }
-    }
-
-    if (complete)
-    {
-        int termCount = selected.size();
-        int literals = 0;
-
-        for (int index : selected)
-        {
-            for (char c : primeTerms[index].pattern)
-            {
-                if (c != '-')
-                    literals++;
-            }
-        }
-
-        if (termCount < bestTerms ||
-            (termCount == bestTerms && literals < bestLiterals))
-        {
-            bestTerms = termCount;
-            bestLiterals = literals;
-            answers.clear();
-            answers.push_back(selected);
-        }
-        else if (termCount == bestTerms &&
-                 literals == bestLiterals)
-        {
-            answers.push_back(selected);
-        }
-
-        return;
-    }
-
-    if ((int)selected.size() >= bestTerms)
-        return;
-
-    int target = -1;
-
-    for (int i = 0; i < (int)ones.size(); i++)
-    {
-        if (!covered[i])
-        {
-            target = i;
-            break;
-        }
-    }
-
-    int targetMinterm = ones[target];
-
-    for (int i = 0; i < (int)primeTerms.size(); i++)
-    {
-        if (find(selected.begin(), selected.end(), i) != selected.end())
-            continue;
-
-        bool covers = false;
-
-        for (int m : primeTerms[i].minterms)
-        {
-            if (m == targetMinterm)
-            {
-                covers = true;
-                break;
-            }
-        }
-
-        if (!covers)
-            continue;
-
-        vector<bool> newCovered = covered;
-
-        for (int j = 0; j < (int)ones.size(); j++)
-        {
-            for (int m : primeTerms[i].minterms)
-            {
-                if (ones[j] == m)
-                    newCovered[j] = true;
-            }
-        }
-
-        selected.push_back(i);
-
-        findCovers(newCovered, selected);
-
-        selected.pop_back();
     }
 }
 
 int main()
 {
-    ifstream file("input.txt");
+    ifstream input("input.txt");
 
-    if (!file)
+    if (!input)
     {
-        cout << "Error: Could not open input.txt\n";
+        cout << "Error: input.txt not found.\n";
         return 0;
     }
 
-    file >> n;
+    input >> n;
 
     if (n < 1 || n > 4)
     {
@@ -286,40 +192,55 @@ int main()
     }
 
     int rowVariables = n / 2;
-    int colVariables = n - rowVariables;
+    int columnVariables = n - rowVariables;
 
-    rows = 1 << rowVariables;
-    cols = 1 << colVariables;
+    int rows = 1 << rowVariables;
+    int columns = 1 << columnVariables;
 
-    vector<vector<int>> kmap(rows, vector<int>(cols));
+    vector<vector<int>> kmap(rows,
+                              vector<int>(columns));
 
     for (int i = 0; i < rows; i++)
     {
-        for (int j = 0; j < cols; j++)
+        for (int j = 0; j < columns; j++)
         {
-            file >> kmap[i][j];
+            input >> kmap[i][j];
         }
     }
 
-    file.close();
+    input.close();
+
+    /*
+       IMPORTANT:
+
+       Professor's K-map format:
+
+       Columns = AB
+       Rows    = CD
+
+       Both are in Gray code order:
+       00 01 11 10
+    */
 
     for (int i = 0; i < rows; i++)
     {
-        for (int j = 0; j < cols; j++)
+        for (int j = 0; j < columns; j++)
         {
             if (kmap[i][j] == 1)
             {
                 int rowValue = gray(i);
-                int colValue = gray(j);
+                int columnValue = gray(j);
 
-                int minterm = (rowValue << colVariables) | colValue;
+                // AB are columns and CD are rows
+                int minterm =
+                    (columnValue << rowVariables) | rowValue;
 
                 ones.push_back(minterm);
             }
         }
     }
 
-    if (ones.size() == 0)
+    if (ones.empty())
     {
         cout << "Minimized expression: 0\n";
         return 0;
@@ -331,27 +252,95 @@ int main()
         return 0;
     }
 
-    findPrimeTerms();
+    findPrimeGroups();
 
-    vector<bool> covered(ones.size(), false);
-    vector<int> selected;
+    int numberOfPrimeGroups = primeGroups.size();
 
-    findCovers(covered, selected);
+    int bestTerms = 100;
+    int bestLiterals = 100;
 
-    cout << "Possible minimized Boolean expressions:\n\n";
+    vector<vector<int>> answers;
+
+    for (int mask = 1;
+         mask < (1 << numberOfPrimeGroups);
+         mask++)
+    {
+        vector<int> selected;
+        vector<bool> covered(ones.size(), false);
+
+        int terms = 0;
+        int literals = 0;
+
+        for (int i = 0; i < numberOfPrimeGroups; i++)
+        {
+            if (mask & (1 << i))
+            {
+                selected.push_back(i);
+                terms++;
+
+                for (char c : primeGroups[i].pattern)
+                {
+                    if (c != '-')
+                        literals++;
+                }
+
+                for (int j = 0; j < (int)ones.size(); j++)
+                {
+                    for (int m : primeGroups[i].minterms)
+                    {
+                        if (ones[j] == m)
+                            covered[j] = true;
+                    }
+                }
+            }
+        }
+
+        bool allCovered = true;
+
+        for (bool x : covered)
+        {
+            if (!x)
+            {
+                allCovered = false;
+                break;
+            }
+        }
+
+        if (!allCovered)
+            continue;
+
+        if (terms < bestTerms ||
+            (terms == bestTerms &&
+             literals < bestLiterals))
+        {
+            bestTerms = terms;
+            bestLiterals = literals;
+
+            answers.clear();
+            answers.push_back(selected);
+        }
+        else if (terms == bestTerms &&
+                 literals == bestLiterals)
+        {
+            answers.push_back(selected);
+        }
+    }
+
+    cout << "\nPossible minimized Boolean expressions:\n\n";
 
     for (int i = 0; i < (int)answers.size(); i++)
     {
         cout << i + 1 << ". ";
 
-        for (int j = 0; j < (int)answers[i].size(); j++)
+        for (int j = 0;
+             j < (int)answers[i].size();
+             j++)
         {
             if (j > 0)
                 cout << " + ";
 
-            cout << patternToExpression(
-                primeTerms[answers[i][j]].pattern
-            );
+            cout << makeExpression(
+                primeGroups[answers[i][j]].pattern);
         }
 
         cout << "\n";
